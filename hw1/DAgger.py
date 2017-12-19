@@ -18,14 +18,13 @@ class DAgger:
         self.net = net
         self.data = Data(gym_env)
         self.gym_env = gym_env
-
+        self.render = False
 
         self.learning_rate = tf.placeholder(tf.float32)
         self.optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate).minimize(self.net.loss)
         self.summary_op = tf.summary.merge_all()
         self.sess = tf.Session()
         self.writer = tf.summary.FileWriter('./log')
-
     def train(self,):
         learning_rate = 1e-1
         for i in range(100000):
@@ -34,8 +33,11 @@ class DAgger:
             summary, loss, _ = self.sess.run([self.summary_op, self.net.loss, self.optimizer], feed_dict=feed_dict)
             self.writer.add_summary(summary, i)
 
+
     def test(self):
-        max_test_step = 1000;
+        env = self.gym_env
+        policy_fn = self.net.pred
+        max_test_steps = 1000;
         while True:
             obs = env.reset()
             done = False
@@ -43,26 +45,18 @@ class DAgger:
             steps = 0
             while not done:
                 action = policy_fn(obs[None, :])
-                observations.append(obs)
-                actions.append(action)
                 obs, r, done, _ = env.step(action)
-                totalr += r
                 steps += 1
-                if args.render:
+                if self.render:
                     env.render()
-                if steps % 100 == 0: print("%i/%i" % (steps, max_steps))
-                if steps >= max_steps:
+                if steps % 100 == 0: print("%i/%i" % (steps, max_test_steps))
+                if steps >= max_test_steps:
                     break
-            returns.append(totalr)
-
-
-
-
-
-
-
 
     def save(self,):
         pass
     
         
+if __name__ == '__main__':
+    #dagger = DAgger()
+    env = gym.make('Hopper-v1 ')
