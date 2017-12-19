@@ -59,6 +59,7 @@ def main():
                 if steps % 100 == 0: print("%i/%i"%(steps, max_steps))
                 if steps >= max_steps:
                     break
+            print totalr / steps
             returns.append(totalr)
 
         print('returns', returns)

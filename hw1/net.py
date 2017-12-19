@@ -49,13 +49,11 @@ class MLP:
     
     
     def make_loss(self, y_pred, y):
-        loss = tf.nn.l2_loss(tf.subtract(y_pred, y) )
+        loss = tf.nn.l2_loss(y_pred - y)
         tf.summary.scalar('l2_loss', loss)
         return loss
     
-    def predict(self, X):
-        y_pred = self.sess.run(self.pred, feed_dict={self.X:X})
-        return y_pred
+
 
 if __name__ == '__main__':
     mlp = MLP(11, 3)
