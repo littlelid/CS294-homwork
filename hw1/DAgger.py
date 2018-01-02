@@ -24,6 +24,7 @@ class DAgger:
         self.optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate).minimize(self.net.loss)
         self.sess = tf.Session()
 
+        self.init_variables = False
         try:    # for compatible
             self.summary_op = tf.summary.merge_all()
         except:
@@ -34,18 +35,37 @@ class DAgger:
         except:
             self.writer = tf.train.SummaryWriter('./log')
 
-    def train(self,):
-        self.sess.run(tf.initialize_all_variables())
+    def train(self):
+        self.init_all_variables()
         learning_rate = 1e-1
-        for i in range(10000):
+        num_epoch = 5
+
+        e = 0
+        while True:
             #if learning_rate % 1000 == 0:
             #    learning_rate *= 0.5
-            batch_X, batch_y = self.data.next_batch()
+            batch_X, batch_y, new_epoch = self.data.next_batch()
+            if new_epoch:
+                e += 1
+            if e >= num_epoch:
+                break
+
             feed_dict = {self.net.X:batch_X, self.net.y:batch_y, self.learning_rate:learning_rate}
             summary, loss, _ = self.sess.run([self.summary_op, self.net.loss, self.optimizer], feed_dict=feed_dict)
             print(loss)
             self.writer.add_summary(summary, i)
 
+    def train_dagger(self, num_dagger=5):
+        self.sess.run(tf.initialize_all_variables())
+        learning_rate = 1e-1
+        num_epoch = 5
+        num_rollouts = 10
+        max_step = 1000
+
+        for _ in range(num_dagger):
+            self.train()
+            fn = lambda o: self.sess.run(self.net.pred, feed_dict={self.net.X: o})
+            self.data.generate_new_data(fn, num_rollouts)
 
     def test(self):
         env = self.gym_env
@@ -76,6 +96,11 @@ class DAgger:
     def predict(self, X):
         y_pred = self.sess.run(self.net.pred, feed_dict={self.net.X:X})
         return y_pred
+
+    def init_all_variables(self):
+        if not self.init_variables:
+            self.init_variables = True
+            self.sess.run(tf.initialize_all_variables())
 
     def save(self,):
         pass
