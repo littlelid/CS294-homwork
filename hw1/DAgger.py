@@ -23,7 +23,7 @@ class DAgger:
         self.learning_rate = tf.placeholder(tf.float32)
         self.optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate).minimize(self.net.loss)
         self.sess = tf.Session()
-
+        self.step = 0
         self.init_variables = False
         try:    # for compatible
             self.summary_op = tf.summary.merge_all()
@@ -38,10 +38,12 @@ class DAgger:
     def train(self):
         self.init_all_variables()
         learning_rate = 1e-1
-        num_epoch = 5
+        num_epoch = 17
 
         e = 0
+
         while True:
+            self.step += 1
             #if learning_rate % 1000 == 0:
             #    learning_rate *= 0.5
             batch_X, batch_y, new_epoch = self.data.next_batch()
@@ -53,19 +55,20 @@ class DAgger:
             feed_dict = {self.net.X:batch_X, self.net.y:batch_y, self.learning_rate:learning_rate}
             summary, loss, _ = self.sess.run([self.summary_op, self.net.loss, self.optimizer], feed_dict=feed_dict)
             print(loss)
-            self.writer.add_summary(summary, i)
+            self.writer.add_summary(summary, global_step=self.step)
+        print self.step
+
 
     def train_dagger(self, num_dagger=5):
-        self.sess.run(tf.initialize_all_variables())
-        learning_rate = 1e-1
-        num_epoch = 5
-        num_rollouts = 10
-        max_step = 1000
+        num_rollouts = 50
 
+        self.train()
         for _ in range(num_dagger):
-            self.train()
             fn = lambda o: self.sess.run(self.net.pred, feed_dict={self.net.X: o})
+            print("HERE!!!")
             self.data.generate_new_data(fn, num_rollouts)
+
+            self.train()
 
     def test(self):
         env = self.gym_env
@@ -94,6 +97,7 @@ class DAgger:
         print('total_reward:', totalr)
 
     def predict(self, X):
+        #print("\t", X.shape)
         y_pred = self.sess.run(self.net.pred, feed_dict={self.net.X:X})
         return y_pred
 
@@ -108,12 +112,13 @@ class DAgger:
         
 if __name__ == '__main__':
     #dagger = DAgger()
+    # now I find the best num of the total of epoch is around 50
     env = gym.make('Hopper-v1')
     X_dim = env.observation_space.shape[0]
     y_dim = env.action_space.shape[0]
     net = MLP(X_dim, y_dim, [50, 100])
     dagger = DAgger(env, net)
-    dagger.train()
+    dagger.train_dagger(num_dagger=2)
     dagger.test()
 
 

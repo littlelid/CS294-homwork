@@ -66,23 +66,29 @@ class Data:
     def aggregate(self, observation_new, action_new):
         observation_new = np.array(observation_new)
         action_new = np.array(action_new)
+        print(observation_new.shape, action_new.shape)
+        print(self.observations.shape, self.actions.shape)
+
 
         self.observations = np.concatenate((self.observations, observation_new))
         self.actions      = np.concatenate((self.actions, action_new))
+
         self.random_shuffle()
 
 
     def random_shuffle(self):
         assert len(self.observations) == len(self.actions)
         num = len(self.observations)
+
         rdn_idx = np.arange(num)
         np.random.shuffle(rdn_idx)
-
         self.observations = self.observations[rdn_idx]
         self.actions      = self.actions[rdn_idx]
 
     def generate_new_data(self, fn, num_rollouts):
         observations = []
+
+
         for i in range(num_rollouts):
             obs = self.env.reset()
 
@@ -91,8 +97,10 @@ class Data:
             steps = 0
 
             while not done:
-                action = fn(obs[None, :])
-                observations.append(obs)
+                obs = obs[None,:]
+                print(obs.shape)
+                action = fn(obs)
+                observations.append(obs.flatten())
 
                 obs, _, done, _ = self.env.step(action)
                 steps += 1
@@ -102,8 +110,8 @@ class Data:
         with tf.Session():
             tf_util.initialize()
             for obs in observations:
-                a = self.policy_fn(obs)
-                actions.append(a)
+                a = self.policy_fn(obs[None,:])
+                actions.append(a.flatten())
         self.aggregate(observations, actions)
 
 
