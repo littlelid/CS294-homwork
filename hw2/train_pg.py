@@ -32,10 +32,16 @@ def build_mlp(
     #
     # Hint: use tf.layers.dense
     #========================================================================================#
-
+    n_layers = 2
+    size = 64
     with tf.variable_scope(scope):
         # YOUR_CODE_HERE
-        pass
+        net = input_placeholder
+        for i in range(n_layers):
+            net = tf.layers.dense(net, size, activation=activation)
+
+        net = tf.layers.dense(net, output_size, activation=output_activation)
+    return net
 
 def pathlength(path):
     return len(path["reward"])
@@ -84,7 +90,6 @@ def train_PG(exp_name='',
     
     # Is this env continuous, or discrete?
     discrete = isinstance(env.action_space, gym.spaces.Discrete)
-
     # Maximum length for episodes
     max_path_length = max_path_length or env.spec.max_episode_steps
 
@@ -123,7 +128,7 @@ def train_PG(exp_name='',
         sy_ac_na = tf.placeholder(shape=[None, ac_dim], name="ac", dtype=tf.float32) 
 
     # Define a placeholder for advantages
-    sy_adv_n = TODO
+    sy_adv_n = tf.placeholder(shape=[None], name="adv", dtype=tf.float32) #my change
 
 
     #========================================================================================#
@@ -167,16 +172,18 @@ def train_PG(exp_name='',
 
     if discrete:
         # YOUR_CODE_HERE
-        sy_logits_na = TODO
-        sy_sampled_ac = TODO # Hint: Use the tf.multinomial op
-        sy_logprob_n = TODO
+        sy_logits_na = build_mlp(sy_ob_no, ac_dim, n_layers=n_layers, size=size, scope="discrete_policy",)
+        sy_sampled_ac = tf.multinomial(sy_logits_na, 1)[:, 0] # Hint: Use the tf.multinomial op
+
+        sy_logprob_n = -tf.nn.sparse_softmax_cross_entropy_with_logits(labels=sy_sampled_ac, logits=sy_logits_na)
 
     else:
+        pass
         # YOUR_CODE_HERE
-        sy_mean = TODO
-        sy_logstd = TODO # logstd should just be a trainable variable, not a network output.
-        sy_sampled_ac = TODO
-        sy_logprob_n = TODO  # Hint: Use the log probability under a multivariate gaussian. 
+        #sy_mean = build_mlp(sy_ob_no, ac_dim, n_layers=n_layers, size=size, scope="continuous_policy",)
+        #sy_logstd = TODO # logstd should just be a trainable variable, not a network output.
+        #sy_sampled_ac = TODO
+        #sy_logprob_n = TODO  # Hint: Use the log probability under a multivariate gaussian.
 
 
 
@@ -184,8 +191,7 @@ def train_PG(exp_name='',
     #                           ----------SECTION 4----------
     # Loss Function and Training Operation
     #========================================================================================#
-
-    loss = TODO # Loss function that we'll differentiate to get the policy gradient.
+    loss = tf.reduce_mean(-sy_logprob_n * sy_adv_n) # Loss function that we'll differentiate to get the policy gradient.
     update_op = tf.train.AdamOptimizer(learning_rate).minimize(loss)
 
 
@@ -204,7 +210,7 @@ def train_PG(exp_name='',
         # Define placeholders for targets, a loss function and an update op for fitting a 
         # neural network baseline. These will be used to fit the neural network baseline. 
         # YOUR_CODE_HERE
-        baseline_update_op = TODO
+        #baseline_update_op = TODO
 
 
     #========================================================================================#
@@ -317,7 +323,27 @@ def train_PG(exp_name='',
         #====================================================================================#
 
         # YOUR_CODE_HERE
-        q_n = TODO
+        q_n = []
+        if reward_to_go: #reward-to-go PG
+            for path in paths:
+
+                rs = path['reward']
+                q_i = 0
+                q_n_path = []
+                for r in reversed(rs):
+                    q_i += r
+                    q_n_path.append(q_i)
+                    q_i *= gamma
+                q_n.extend(reversed(q_n_path))
+        else:
+            for path in paths:
+                rs = path['reward']
+                q_i = 0
+                for r in reversed(rs):
+                    q_i *= gamma
+                    q_i += r
+                q_n.extend([q_i for _ in range(len(rs))])
+        q_n = np.array(q_n)
 
         #====================================================================================#
         #                           ----------SECTION 5----------
@@ -333,8 +359,9 @@ def train_PG(exp_name='',
             # (mean and std) of the current or previous batch of Q-values. (Goes with Hint
             # #bl2 below.)
 
-            b_n = TODO
-            adv_n = q_n - b_n
+            #b_n = TODO
+            #adv_n = q_n - b_n
+            pass
         else:
             adv_n = q_n.copy()
 
@@ -347,7 +374,10 @@ def train_PG(exp_name='',
             # On the next line, implement a trick which is known empirically to reduce variance
             # in policy gradient methods: normalize adv_n to have mean zero and std=1. 
             # YOUR_CODE_HERE
-            pass
+            adv_n_mean = np.mean(adv_n)
+            adv_n_var = np.var(adv_n)
+            adv_n = (adv_n - adv_n_mean) / adv_n_var
+
 
 
         #====================================================================================#
@@ -380,13 +410,30 @@ def train_PG(exp_name='',
         # and after an update, and then log them below. 
 
         # YOUR_CODE_HERE
+        #feed_dict = {sy_ob_no:ob_no, sy_ac_na:ac_na, sy_adv_n:adv_n}
 
 
+
+
+        #loss_train, _ = sess.run([loss, update_op], feed_dict=feed_dict)
+        #logits_na_eval, sampled_ac_eval = sess.run([sy_logits_na, sy_sampled_ac], feed_dict=feed_dict)
+        #print(logits_na_eval.shape)
+        #print(logits_na_eval[:5], sampled_ac_eval[:5])
+
+        #print(loss_train)
+
+
+        feed_dict = {sy_ob_no: ob_no, sy_ac_na: ac_na, sy_adv_n: q_n}
+        loss_before = sess.run(loss, feed_dict=feed_dict)
+        sess.run(update_op, feed_dict=feed_dict)  # Update
+        loss_after = sess.run(loss, feed_dict=feed_dict)
+        
         # Log diagnostics
         returns = [path["reward"].sum() for path in paths]
         ep_lengths = [pathlength(path) for path in paths]
         logz.log_tabular("Time", time.time() - start)
         logz.log_tabular("Iteration", itr)
+        logz.log_tabular("Loss", loss_before)
         logz.log_tabular("AverageReturn", np.mean(returns))
         logz.log_tabular("StdReturn", np.std(returns))
         logz.log_tabular("MaxReturn", np.max(returns))
@@ -427,7 +474,6 @@ def main():
         os.makedirs(logdir)
 
     max_path_length = args.ep_len if args.ep_len > 0 else None
-
     for e in range(args.n_experiments):
         seed = args.seed + 10*e
         print('Running experiment with seed %d'%seed)
