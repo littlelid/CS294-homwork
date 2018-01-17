@@ -7,7 +7,7 @@ import os
 import time
 import inspect
 from multiprocessing import Process
-
+import tensorflow.contrib.distributions as ds
 #============================================================================================#
 # Utilities
 #============================================================================================#
@@ -176,12 +176,17 @@ def train_PG(exp_name='',
         sy_logprob_n = -tf.nn.sparse_softmax_cross_entropy_with_logits(labels=sy_ac_na, logits=sy_logits_na)
 
     else:
-        pass
         # YOUR_CODE_HERE
-        #sy_mean = build_mlp(sy_ob_no, ac_dim, n_layers=n_layers, size=size, scope="continuous_policy",)
-        #sy_logstd = TODO # logstd should just be a trainable variable, not a network output.
-        #sy_sampled_ac = TODO
-        #sy_logprob_n = TODO  # Hint: Use the log probability under a multivariate gaussian.
+        sy_mean = build_mlp(sy_ob_no, ac_dim, n_layers=n_layers, size=size, scope="continuous_policy",)
+        sy_logstd = tf.get_variable("logstd", [ac_dim], dtype=tf.float16)  #logstd should just be a trainable variable, not a network output.
+        sy_std = tf.exp(sy_logstd, name="std") # "The standard deviation must always be positive and is better approximated as the exponential of a function"
+
+        z = tf.random_normal(tf.shape(sy_mean))
+        sy_sampled_ac = sy_mean + z * sy_std
+
+
+        sy_logprob_n = ds.MultivariateNormalDiag(sy_mean, sy_std).log_prob(sy_ac_na) #Hint: Use the log probability under a multivariate gaussian.
+        # actual last step performs like this:  -0.5 * tf.reduce_sum(tf.pow(sy_mean - sy_ac_na, 2) / sy_std ) + const. Accordind to my test, const = -2.7568156
 
 
     #========================================================================================#
