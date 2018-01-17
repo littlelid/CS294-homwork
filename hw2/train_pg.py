@@ -32,8 +32,6 @@ def build_mlp(
     #
     # Hint: use tf.layers.dense
     #========================================================================================#
-    n_layers = 2
-    size = 64
     with tf.variable_scope(scope):
         # YOUR_CODE_HERE
         net = input_placeholder
@@ -170,12 +168,12 @@ def train_PG(exp_name='',
     #   
     #========================================================================================#
 
+
     if discrete:
         # YOUR_CODE_HERE
         sy_logits_na = build_mlp(sy_ob_no, ac_dim, n_layers=n_layers, size=size, scope="discrete_policy",)
         sy_sampled_ac = tf.multinomial(sy_logits_na, 1)[:, 0] # Hint: Use the tf.multinomial op
-
-        sy_logprob_n = -tf.nn.sparse_softmax_cross_entropy_with_logits(labels=sy_sampled_ac, logits=sy_logits_na)
+        sy_logprob_n = -tf.nn.sparse_softmax_cross_entropy_with_logits(labels=sy_ac_na, logits=sy_logits_na)
 
     else:
         pass
@@ -184,7 +182,6 @@ def train_PG(exp_name='',
         #sy_logstd = TODO # logstd should just be a trainable variable, not a network output.
         #sy_sampled_ac = TODO
         #sy_logprob_n = TODO  # Hint: Use the log probability under a multivariate gaussian.
-
 
 
     #========================================================================================#
@@ -323,6 +320,7 @@ def train_PG(exp_name='',
         #====================================================================================#
 
         # YOUR_CODE_HERE
+
         q_n = []
         if reward_to_go: #reward-to-go PG
             for path in paths:
@@ -344,6 +342,7 @@ def train_PG(exp_name='',
                     q_i += r
                 q_n.extend([q_i for _ in range(len(rs))])
         q_n = np.array(q_n)
+
 
         #====================================================================================#
         #                           ----------SECTION 5----------
@@ -427,7 +426,7 @@ def train_PG(exp_name='',
         loss_before = sess.run(loss, feed_dict=feed_dict)
         sess.run(update_op, feed_dict=feed_dict)  # Update
         loss_after = sess.run(loss, feed_dict=feed_dict)
-        
+
         # Log diagnostics
         returns = [path["reward"].sum() for path in paths]
         ep_lengths = [pathlength(path) for path in paths]
