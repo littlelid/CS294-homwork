@@ -81,23 +81,17 @@ def train_PG(exp_name='',
     params = {k: locals_[k] if k in locals_ else None for k in args}
     logz.save_params(params)
 
-    print("*********3*******")
     # Set random seeds
     tf.set_random_seed(seed)
     np.random.seed(seed)
-
-    print("*********4*******")
     # Make the gym environment
     env = gym.make(env_name)
 
-    print("*********5*******")
     # Is this env continuous, or discrete?
     discrete = isinstance(env.action_space, gym.spaces.Discrete)
-    print("*********6*******")
     # Maximum length for episodes
     max_path_length = max_path_length or env.spec.max_episode_steps
 
-    print("*********7*******")
     #========================================================================================#
     # Notes on notation:
     # 
@@ -185,10 +179,10 @@ def train_PG(exp_name='',
     else:
         # YOUR_CODE_HERE
         sy_mean = build_mlp(sy_ob_no, ac_dim, n_layers=n_layers, size=size, scope="continuous_policy",)
-        sy_logstd = tf.get_variable("logstd", [ac_dim], dtype=tf.float16)  #logstd should just be a trainable variable, not a network output.
+        sy_logstd = tf.get_variable("logstd", [ac_dim], dtype=tf.float32)  #logstd should just be a trainable variable, not a network output.
         sy_std = tf.exp(sy_logstd, name="std") # "The standard deviation must always be positive and is better approximated as the exponential of a function"
 
-        z = tf.random_normal(tf.shape(sy_mean))
+        z = tf.random_normal(tf.shape(sy_mean), dtype=tf.float32)
         sy_sampled_ac = sy_mean + z * sy_std
 
 
