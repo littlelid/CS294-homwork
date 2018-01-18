@@ -73,24 +73,31 @@ def train_PG(exp_name='',
     # Configure output directory for logging
     logz.configure_output_dir(logdir)
 
+
+    print("*********2*******")
     # Log experimental parameters
     args = inspect.getargspec(train_PG)[0]
     locals_ = locals()
     params = {k: locals_[k] if k in locals_ else None for k in args}
     logz.save_params(params)
 
+    print("*********3*******")
     # Set random seeds
     tf.set_random_seed(seed)
     np.random.seed(seed)
 
+    print("*********4*******")
     # Make the gym environment
     env = gym.make(env_name)
-    
+
+    print("*********5*******")
     # Is this env continuous, or discrete?
     discrete = isinstance(env.action_space, gym.spaces.Discrete)
+    print("*********6*******")
     # Maximum length for episodes
     max_path_length = max_path_length or env.spec.max_episode_steps
 
+    print("*********7*******")
     #========================================================================================#
     # Notes on notation:
     # 
@@ -212,7 +219,10 @@ def train_PG(exp_name='',
         # Define placeholders for targets, a loss function and an update op for fitting a 
         # neural network baseline. These will be used to fit the neural network baseline. 
         # YOUR_CODE_HERE
-        #baseline_update_op = TODO
+
+        sy_baseline_target_n = tf.placeholder(shape=[None], name="baseline_target", dtype=tf.float32)
+        baseline_loss = tf.nn.l2_loss(baseline_prediction - sy_baseline_target_n)
+        baseline_update_op = tf.train.AdamOptimizer(learning_rate).minimize(baseline_loss)
 
 
     #========================================================================================#
@@ -363,9 +373,17 @@ def train_PG(exp_name='',
             # (mean and std) of the current or previous batch of Q-values. (Goes with Hint
             # #bl2 below.)
 
-            #b_n = TODO
-            #adv_n = q_n - b_n
-            pass
+
+            b_n = sess.run(baseline_prediction, feed_dict={sy_ob_no:ob_no})
+            b_n_mean = np.mean(b_n, axis=0)
+            b_n_var  = np.std(b_n, axis=0) + 1e-3
+            b_n = (b_n - b_n_mean) / b_n_var
+
+            b_n += np.mean(q_n, axis=0)
+            b_n *= np.std(q_n, axis=0) + 1e-3
+
+            adv_n = q_n - b_n
+
         else:
             adv_n = q_n.copy()
 
@@ -379,7 +397,7 @@ def train_PG(exp_name='',
             # in policy gradient methods: normalize adv_n to have mean zero and std=1. 
             # YOUR_CODE_HERE
             adv_n_mean = np.mean(adv_n)
-            adv_n_var = np.var(adv_n)
+            adv_n_var = np.std(adv_n) + 1e-3
             adv_n = (adv_n - adv_n_mean) / adv_n_var
 
 
@@ -400,7 +418,11 @@ def train_PG(exp_name='',
             # targets to have mean zero and std=1. (Goes with Hint #bl1 above.)
 
             # YOUR_CODE_HERE
-            pass
+            baseline_target_n = q_n.copy()
+            baseline_target_n = (baseline_target_n - np.mean(baseline_target_n, axis=0)) / (np.var(baseline_target_n, axis=0) + 1e-3)
+
+            for _ in range(5):
+                sess.run(baseline_update_op, feed_dict={sy_ob_no:ob_no, sy_baseline_target_n:baseline_target_n})
 
         #====================================================================================#
         #                           ----------SECTION 4----------
@@ -427,7 +449,7 @@ def train_PG(exp_name='',
         #print(loss_train)
 
 
-        feed_dict = {sy_ob_no: ob_no, sy_ac_na: ac_na, sy_adv_n: q_n}
+        feed_dict = {sy_ob_no: ob_no, sy_ac_na: ac_na, sy_adv_n: adv_n}
         loss_before = sess.run(loss, feed_dict=feed_dict)
         sess.run(update_op, feed_dict=feed_dict)  # Update
         loss_after = sess.run(loss, feed_dict=feed_dict)
@@ -476,7 +498,7 @@ def main():
     logdir = os.path.join('data', logdir)
     if not(os.path.exists(logdir)):
         os.makedirs(logdir)
-
+    print("*********1*******")
     max_path_length = args.ep_len if args.ep_len > 0 else None
     for e in range(args.n_experiments):
         seed = args.seed + 10*e
