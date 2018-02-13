@@ -61,7 +61,8 @@ def train_PG(exp_name='',
              animate=True, 
              logdir=None, 
              normalize_advantages=True,
-             nn_baseline=False, 
+             nn_baseline=False,
+             nn_baseline_iter=5,
              seed=0,
              # network arguments
              n_layers=1,
@@ -81,23 +82,17 @@ def train_PG(exp_name='',
     params = {k: locals_[k] if k in locals_ else None for k in args}
     logz.save_params(params)
 
-    print("*********3*******")
     # Set random seeds
     tf.set_random_seed(seed)
     np.random.seed(seed)
-
-    print("*********4*******")
     # Make the gym environment
     env = gym.make(env_name)
 
-    print("*********5*******")
     # Is this env continuous, or discrete?
     discrete = isinstance(env.action_space, gym.spaces.Discrete)
-    print("*********6*******")
     # Maximum length for episodes
     max_path_length = max_path_length or env.spec.max_episode_steps
 
-    print("*********7*******")
     #========================================================================================#
     # Notes on notation:
     # 
@@ -185,10 +180,10 @@ def train_PG(exp_name='',
     else:
         # YOUR_CODE_HERE
         sy_mean = build_mlp(sy_ob_no, ac_dim, n_layers=n_layers, size=size, scope="continuous_policy",)
-        sy_logstd = tf.get_variable("logstd", [ac_dim], dtype=tf.float16)  #logstd should just be a trainable variable, not a network output.
+        sy_logstd = tf.get_variable("logstd", [ac_dim], dtype=tf.float32)  #logstd should just be a trainable variable, not a network output.
         sy_std = tf.exp(sy_logstd, name="std") # "The standard deviation must always be positive and is better approximated as the exponential of a function"
 
-        z = tf.random_normal(tf.shape(sy_mean))
+        z = tf.random_normal(tf.shape(sy_mean), dtype=tf.float32)
         sy_sampled_ac = sy_mean + z * sy_std
 
 
@@ -415,13 +410,18 @@ def train_PG(exp_name='',
             # baseline_update_op you defined earlier.
             #
             # Hint #bl2: Instead of trying to target raw Q-values directly, rescale the 
-            # targets to have mean zero and std=1. (Goes with Hint #bl1 above.)
+            # targets to have mean zero an
+            #
+            #
+            #
+            #
+            # d std=1. (Goes with Hint #bl1 above.)
 
             # YOUR_CODE_HERE
             baseline_target_n = q_n.copy()
             baseline_target_n = (baseline_target_n - np.mean(baseline_target_n, axis=0)) / (np.var(baseline_target_n, axis=0) + 1e-3)
 
-            for _ in range(5):
+            for _ in range(nn_baseline_iter):
                 sess.run(baseline_update_op, feed_dict={sy_ob_no:ob_no, sy_baseline_target_n:baseline_target_n})
 
         #====================================================================================#
@@ -472,6 +472,27 @@ def train_PG(exp_name='',
         logz.pickle_tf_vars()
 
 
+    '''
+    if true:
+    ob = env.reset()
+
+
+    while True:
+
+        env.render()
+        time.sleep(0.05)
+
+        ac = sess.run(sy_sampled_ac, feed_dict={sy_ob_no: ob[None]})
+        ac = ac[0]
+
+        ob, rew, done, _ = env.step(ac)
+        rewards.append(rew)
+        steps += 1
+        if done or steps > max_path_length:
+            break
+    '''
+
+
 def main():
     import argparse
     parser = argparse.ArgumentParser()
@@ -486,6 +507,7 @@ def main():
     parser.add_argument('--reward_to_go', '-rtg', action='store_true')
     parser.add_argument('--dont_normalize_advantages', '-dna', action='store_true')
     parser.add_argument('--nn_baseline', '-bl', action='store_true')
+    parser.add_argument('--nn_baseline_iter', '-bl_it', type=int, default=5)
     parser.add_argument('--seed', type=int, default=1)
     parser.add_argument('--n_experiments', '-e', type=int, default=1)
     parser.add_argument('--n_layers', '-l', type=int, default=1)
@@ -516,7 +538,8 @@ def main():
                 animate=args.render,
                 logdir=os.path.join(logdir,'%d'%seed),
                 normalize_advantages=not(args.dont_normalize_advantages),
-                nn_baseline=args.nn_baseline, 
+                nn_baseline=args.nn_baseline,
+                nn_baseline_iter=args.nn_baseline_iter,
                 seed=seed,
                 n_layers=args.n_layers,
                 size=args.size
