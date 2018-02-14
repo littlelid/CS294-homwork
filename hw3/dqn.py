@@ -135,7 +135,9 @@ def learn(env,
     target_q_func_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='target_q_func')
     q_tp1_target = tf.reduce_max(q_tp1, axis=1)
 
-    q_t_a = tf.gather(q_t, act_t_ph)
+    #q_t_a = tf.gather(q_t, act_t_ph)
+    q_t_a = tf.reduce_sum(q_t * tf.one_hot(act_t_ph, num_actions), axis=1)
+
     y = rew_t_ph + (1 - done_mask_ph) * gamma * q_tp1_target
 
     total_error = tf.nn.l2_loss(y - q_t_a)
@@ -174,6 +176,7 @@ def learn(env,
 
     for t in itertools.count():
         ### 1. Check stopping criterion
+        #print("itr:",t)
         if stopping_criterion is not None and stopping_criterion(env, t):
             break
 
@@ -215,16 +218,16 @@ def learn(env,
         idx = replay_buffer.store_frame(last_obs)
         last_obs = replay_buffer.encode_recent_observation()
 
-        epsilon = exploration(t)
+        epsilon = exploration.value(t)
 
         if not model_initialized or random.random() < epsilon:
             action = random.randint(0, num_actions - 1)
         else:
-            q_t_eval = session.run(q_t, feed_dict={obs_t_ph:last_obs})
+            q_t_eval = session.run(q_t, feed_dict={obs_t_ph:last_obs[np.newaxis, :]})
             action = np.argmax(q_t_eval)
 
         obs, reward, done, info = env.step(action)
-        replay_buffer.store_effect(idx, obs, reward, done)
+        replay_buffer.store_effect(idx, action, reward, done)
 
         if done:
             last_obs = env.reset()
@@ -294,10 +297,11 @@ def learn(env,
                 act_t_ph:act_t_batch,
                 rew_t_ph:rew_t_batch,
                 obs_tp1_ph:obs_tp1_batch,
-                done_mask_ph:done_mask_batch
+                done_mask_ph:done_mask_batch,
+                learning_rate:optimizer_spec.lr_schedule.value(t)
 
             })
-            
+
             num_param_updates += 1
             if num_param_updates % target_update_freq == 0:
                 session.run(update_target_fn)
